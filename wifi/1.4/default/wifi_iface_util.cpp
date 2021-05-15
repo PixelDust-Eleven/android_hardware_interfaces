@@ -56,15 +56,28 @@ std::array<uint8_t, 6> WifiIfaceUtil::getFactoryMacAddress(
 
 bool WifiIfaceUtil::setMacAddress(const std::string& iface_name,
                                   const std::array<uint8_t, 6>& mac) {
+#if !defined(WIFI_AVOID_IFACE_RESET_MAC_CHANGE) && !defined(WIFI_RESET_IFACE_AFTER_MAC_CHANGE)
+    if (!iface_tool_.lock()->SetUpState(iface_name.c_str(), false)) {
+        LOG(ERROR) << "SetUpState(false) failed.";
+        return false;
+    }
+#endif
     if (!iface_tool_.lock()->SetMacAddress(iface_name.c_str(), mac)) {
         LOG(ERROR) << "SetMacAddress failed.";
         return false;
     }
-    LOG(DEBUG) << "Successfully SetMacAddress.";
-    return true;
-}
-
-void WifiIfaceUtil::onStateToggleOffOn(const std::string& iface_name) {
+#ifdef WIFI_RESET_IFACE_AFTER_MAC_CHANGE
+    if (!iface_tool_.lock()->SetUpState(iface_name.c_str(), false)) {
+        LOG(ERROR) << "SetUpState(false) failed.";
+        return false;
+    }
+#endif
+#ifndef WIFI_AVOID_IFACE_RESET_MAC_CHANGE
+    if (!iface_tool_.lock()->SetUpState(iface_name.c_str(), true)) {
+        LOG(ERROR) << "SetUpState(true) failed.";
+        return false;
+    }
+#endif
     IfaceEventHandlers event_handlers = {};
     const auto it = event_handlers_map_.find(iface_name);
     if (it != event_handlers_map_.end()) {
@@ -73,6 +86,8 @@ void WifiIfaceUtil::onStateToggleOffOn(const std::string& iface_name) {
     if (event_handlers.on_state_toggle_off_on != nullptr) {
         event_handlers.on_state_toggle_off_on(iface_name);
     }
+    LOG(DEBUG) << "Successfully SetMacAddress.";
+    return true;
 }
 
 void WifiIfaceUtil::setRandomMacAddressIndex(int idx) {
